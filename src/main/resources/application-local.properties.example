@@ -1,0 +1,3 @@
+# 이 파일을 application-local.properties로 복사한 후 실제 키를 채우세요.
+# JWT 서명용 비밀 키. 최소 32자 이상의 문자열이어야 합니다.
+jwt.secret=YOUR-SECRET-KEY-AT-LEAST-32-CHARACTERS-HERE
