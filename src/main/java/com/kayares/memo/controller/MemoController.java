@@ -5,6 +5,9 @@ import com.kayares.memo.domain.User;
 import com.kayares.memo.dto.MemoCreateRequest;
 import com.kayares.memo.dto.MemoResponse;
 import com.kayares.memo.dto.MemoUpdateRequest;
+import com.kayares.memo.exception.MemoNotFoundException;
+import com.kayares.memo.exception.UnauthorizedException;
+import com.kayares.memo.exception.UserNotFoundException;
 import com.kayares.memo.repository.MemoRepository;
 import com.kayares.memo.repository.UserRepository;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,7 +33,7 @@ public class MemoController {
             Authentication authentication) {
 
         User user = userRepository.findByUsername(authentication.getName())
-                .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
+                .orElseThrow(() -> new UserNotFoundException("사용자를 찾을 수 없습니다."));
 
         Memo memo = new Memo(request.getTitle(), request.getContent(), user);
         Memo savedMemo = memoRepository.save(memo);
@@ -48,7 +51,7 @@ public class MemoController {
     @GetMapping("/{id}")
     public ResponseEntity<MemoResponse> getMemo(@PathVariable Long id) {
         Memo memo = memoRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("해당 메모가 없습니다. id=" + id));
+                .orElseThrow(() -> new MemoNotFoundException(id));
         return ResponseEntity.ok(new MemoResponse(memo));
     }
 
@@ -60,10 +63,10 @@ public class MemoController {
             Authentication authentication) {
 
         Memo memo = memoRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("해당 메모가 없습니다. id=" + id));
+                .orElseThrow(() -> new MemoNotFoundException(id));
 
         if (!memo.getUser().getUsername().equals(authentication.getName())) {
-            throw new IllegalArgumentException("본인의 메모만 수정할 수 있습니다.");
+            throw new UnauthorizedException("본인의 메모만 수정할 수 있습니다.");
         }
 
         memo.update(request.getTitle(), request.getContent());
@@ -77,10 +80,10 @@ public class MemoController {
             Authentication authentication) {
 
         Memo memo = memoRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("해당 메모가 없습니다. id=" + id));
+                .orElseThrow(() -> new MemoNotFoundException(id));
 
         if (!memo.getUser().getUsername().equals(authentication.getName())) {
-            throw new IllegalArgumentException("본인의 메모만 삭제할 수 있습니다.");
+            throw new UnauthorizedException("본인의 메모만 삭제할 수 있습니다.");
         }
 
         memoRepository.delete(memo);
