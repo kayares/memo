@@ -10,6 +10,7 @@ import com.kayares.memo.exception.UnauthorizedException;
 import com.kayares.memo.exception.UserNotFoundException;
 import com.kayares.memo.repository.MemoRepository;
 import com.kayares.memo.repository.UserRepository;
+import com.kayares.memo.service.MemoService;
 import org.springframework.transaction.annotation.Transactional;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -24,52 +25,50 @@ import java.util.List;
 @RequiredArgsConstructor
 public class MemoController {
 
-    private final MemoRepository memoRepository;
-    private final UserRepository userRepository;
+    private final MemoService memoService;
 
     @PostMapping
     public ResponseEntity<MemoResponse> createMemo(
             @Valid @RequestBody MemoCreateRequest request,
             Authentication authentication) {
 
-        User user = userRepository.findByUsername(authentication.getName())
-                .orElseThrow(() -> new UserNotFoundException("사용자를 찾을 수 없습니다."));
+        Memo savedMemo = memoService.create(request.getTitle(),
+                request.getContent(),
+                authentication.getName());
 
-        Memo memo = new Memo(request.getTitle(), request.getContent(), user);
-        Memo savedMemo = memoRepository.save(memo);
         return ResponseEntity.ok(new MemoResponse(savedMemo));
     }
 
     @GetMapping
     public ResponseEntity<List<MemoResponse>> getMemos() {
-        List<MemoResponse> memos = memoRepository.findAll().stream()
+
+        List<MemoResponse> memos = memoService
+                .findAll()
+                .stream()
                 .map(MemoResponse::new)
                 .toList();
+
         return ResponseEntity.ok(memos);
     }
 
     @GetMapping("/{id}")
     public ResponseEntity<MemoResponse> getMemo(@PathVariable Long id) {
-        Memo memo = memoRepository.findById(id)
-                .orElseThrow(() -> new MemoNotFoundException(id));
+
+        Memo memo = memoService.findById(id);
+
         return ResponseEntity.ok(new MemoResponse(memo));
     }
 
-    @Transactional
     @PutMapping("/{id}")
     public ResponseEntity<MemoResponse> updateMemo(
             @PathVariable Long id,
             @Valid @RequestBody MemoUpdateRequest request,
             Authentication authentication) {
 
-        Memo memo = memoRepository.findById(id)
-                .orElseThrow(() -> new MemoNotFoundException(id));
-
-        if (!memo.getUser().getUsername().equals(authentication.getName())) {
-            throw new UnauthorizedException("본인의 메모만 수정할 수 있습니다.");
-        }
-
-        memo.update(request.getTitle(), request.getContent());
+        Memo memo = memoService.update(id,
+                request.getTitle(),
+                request.getContent(),
+                authentication.getName());
 
         return ResponseEntity.ok(new MemoResponse(memo));
     }
@@ -79,14 +78,7 @@ public class MemoController {
             @PathVariable Long id,
             Authentication authentication) {
 
-        Memo memo = memoRepository.findById(id)
-                .orElseThrow(() -> new MemoNotFoundException(id));
-
-        if (!memo.getUser().getUsername().equals(authentication.getName())) {
-            throw new UnauthorizedException("본인의 메모만 삭제할 수 있습니다.");
-        }
-
-        memoRepository.delete(memo);
+        memoService.delete(id, authentication.getName());
 
         return ResponseEntity.noContent().build();
     }
