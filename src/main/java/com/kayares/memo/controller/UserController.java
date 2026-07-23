@@ -6,6 +6,8 @@ import com.kayares.memo.dto.LoginRequest;
 import com.kayares.memo.dto.LoginResponse;
 import com.kayares.memo.dto.SignupRequest;
 import com.kayares.memo.dto.UserResponse;
+import com.kayares.memo.exception.DuplicateUsernameException;
+import com.kayares.memo.exception.InvalidCredentialsException;
 import com.kayares.memo.repository.UserRepository;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -26,7 +28,7 @@ public class UserController {
     public ResponseEntity<UserResponse> signup(@Valid @RequestBody SignupRequest request) {
 
         if (userRepository.existsByUsername(request.getUsername())) {
-            throw new IllegalArgumentException("이미 사용 중인 아이디입니다.");
+            throw new DuplicateUsernameException("이미 사용 중인 아이디입니다.");
         }
 
         String encodedPassword = passwordEncoder.encode(request.getPassword());
@@ -45,10 +47,10 @@ public class UserController {
     public ResponseEntity<LoginResponse> login(@Valid @RequestBody LoginRequest request) {
 
         User user = userRepository.findByUsername(request.getUsername())
-                .orElseThrow(() -> new IllegalArgumentException("아이디 또는 비밀번호가 올바르지 않습니다."));
+                .orElseThrow(() -> new InvalidCredentialsException("아이디 또는 비밀번호가 올바르지 않습니다."));
 
         if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
-            throw new IllegalArgumentException("아이디 또는 비밀번호가 올바르지 않습니다.");
+            throw new InvalidCredentialsException("아이디 또는 비밀번호가 올바르지 않습니다.");
         }
 
         String token = jwtTokenProvider.createToken(user.getUsername());
