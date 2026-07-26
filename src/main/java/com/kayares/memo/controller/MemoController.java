@@ -1,17 +1,10 @@
 package com.kayares.memo.controller;
 
 import com.kayares.memo.domain.Memo;
-import com.kayares.memo.domain.User;
 import com.kayares.memo.dto.MemoCreateRequest;
 import com.kayares.memo.dto.MemoResponse;
 import com.kayares.memo.dto.MemoUpdateRequest;
-import com.kayares.memo.exception.MemoNotFoundException;
-import com.kayares.memo.exception.UnauthorizedException;
-import com.kayares.memo.exception.UserNotFoundException;
-import com.kayares.memo.repository.MemoRepository;
-import com.kayares.memo.repository.UserRepository;
 import com.kayares.memo.service.MemoService;
-import org.springframework.transaction.annotation.Transactional;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
