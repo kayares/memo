@@ -18,7 +18,7 @@ Spring Boot + JWT로 만든 메모 REST API. 백엔드 학습용 프로젝트.
 - JWT 기반 인증 (모든 메모 API는 토큰 필요)
 - 메모 CRUD
 - 인가 체크 - 본인의 메모만 수정 / 삭제 가능
-- 전역 예외 처리로 일관된 에러 응답
+- 전역 예외 처리로 컨트롤러 계층 에러 응답 형식 통일
 
 ## 프로젝트 구조
 
@@ -38,6 +38,8 @@ com.kayares.memo
 문자열 파라미터를 받으며, DTO 변환은 컨트롤러에서 수행합니다.
 
 ## 실행 방법
+
+**요구 사항** — JDK 21 이상
 
 ### 1. 저장소 클론
 
@@ -60,6 +62,12 @@ cd memo
 
 기본 포트: `8080`
 
+### 4. 주요 설정
+
+- `spring.jpa.open-in-view=false` — 영속성 컨텍스트를 서비스 계층으로 제한
+- `spring.jpa.hibernate.ddl-auto=create` — 실행 시 스키마 재생성 (학습용)
+- H2 콘솔: `http://localhost:8080/h2-console`
+
 ## API 명세
 
 | Method | Endpoint      | 설명               | 인증 |
@@ -78,14 +86,137 @@ cd memo
 Authorization: Bearer {your-jwt-token}
 ```
 
+### 회원가입
+
+**요청**
+
+```http
+POST /users/signup
+Content-Type: application/json
+
+{
+  "username": "alice",
+  "password": "password1234"
+}
+```
+
+**응답** `201 Created`
+
+```json
+{
+  "id": 1,
+  "username": "alice"
+}
+```
+
+### 로그인
+
+**요청**
+
+```http
+POST /users/login
+Content-Type: application/json
+
+{
+  "username": "alice",
+  "password": "password1234"
+}
+```
+
+**응답** `200 OK`
+
+```json
+{
+  "token": "eyJhbGciOiJIUzUxMiJ9..."
+}
+```
+
+이후 요청의 `Authorization` 헤더에 이 토큰을 사용합니다.
+
+### 메모 생성
+
+**요청**
+
+```http
+POST /memos
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9...
+
+{
+  "title": "첫 메모",
+  "content": "메모 내용입니다."
+}
+```
+
+**응답** `201 Created`
+
+```json
+{
+  "id": 1,
+  "title": "첫 메모",
+  "content": "메모 내용입니다.",
+  "createdAt": "2026-07-27T14:58:06.674852",
+  "username": "alice"
+}
+```
+
+### 메모 전체 조회
+
+**요청**
+
+```http
+GET /memos
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9...
+```
+
+**응답** `200 OK`
+
+```json
+[
+  {
+    "id": 1,
+    "title": "첫 메모",
+    "content": "메모 내용입니다.",
+    "createdAt": "2026-07-27T14:58:06.674852",
+    "username": "alice"
+  }
+]
+```
+
+### 메모 단건 조회
+
+**요청**
+
+```http
+GET /memos/1
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9...
+```
+
+**응답** `200 OK`
+
+```json
+{
+  "id": 1,
+  "title": "첫 메모",
+  "content": "메모 내용입니다.",
+  "createdAt": "2026-07-27T14:58:06.674852",
+  "username": "alice"
+}
+```
+
+메모 수정(`PUT /memos/{id}`)의 요청·응답 형식은 생성과 동일하며,
+작성자가 아닌 경우 403을 반환합니다.
+삭제(`DELETE /memos/{id}`)는 성공 시 본문 없이 204를 반환합니다.
+
 ## 에러 응답
 
-모든 에러는 동일한 형식으로 반환됩니다:
+컨트롤러 계층에서 발생한 에러는 `@RestControllerAdvice`가 처리하며,
+동일한 형식으로 반환됩니다:
 
 ```json
 {
   "status": 404,
-  "message": "메모를 찾을 수 없습니다: {id}"
+  "message": "메모를 찾을 수 없습니다: 999"
 }
 ```
 
@@ -100,6 +231,28 @@ Authorization: Bearer {your-jwt-token}
 로그인 실패 시 아이디가 없는 경우와 비밀번호가 틀린 경우에
 동일한 메시지를 반환합니다.
 두 경우를 구분하면 특정 아이디의 존재 여부가 노출되기 때문입니다.
+
+### 인증 실패 응답
+
+토큰이 없거나 유효하지 않은 요청은 Security 필터 단계에서 차단됩니다.
+필터는 `DispatcherServlet` 앞에 위치하므로 `@RestControllerAdvice`가
+관여하지 못하며, 위 형식이 아닌 Spring Boot 기본 응답이 반환됩니다.
+
+`403 Forbidden`
+
+```json
+{
+  "timestamp": "2026-07-27T06:25:08.334+00:00",
+  "status": 403,
+  "error": "Forbidden",
+  "path": "/memos"
+}
+```
+
+401이 아닌 403인 것은 `formLogin`과 `httpBasic`을 사용하지 않아
+Spring Security의 기본 진입점이 `Http403ForbiddenEntryPoint`로
+설정되기 때문입니다. 응답 형식과 상태 코드를 통일하려면
+`AuthenticationEntryPoint`를 직접 구현해 등록해야 합니다.
 
 ## 트러블 슈팅
 
@@ -118,6 +271,67 @@ JPA의 더티 체킹은 영속성 컨텍스트 안에서만 동작하는데,
 
 **해결**
 서비스 계층의 수정 메서드에 `@Transactional` 추가했습니다.
+
+### 500 에러가 403으로 반환되어 원인 파악이 막힌 문제
+
+**증상**
+`GET /memos` 호출 시 403 Forbidden이 반환됐습니다.
+JWT는 정상이었고 같은 토큰으로 다른 엔드포인트는 문제없이 동작했습니다.
+
+**원인**
+Spring Boot는 처리되지 않은 예외가 발생하면 내부적으로 `/error`로 forward 합니다.
+그런데 `SecurityConfig`의 `anyRequest().authenticated()`가
+이 내부 forward 요청까지 인증 대상으로 검사하면서 실제 500이 403으로 덮였습니다.
+403은 증상이었고, 진짜 예외는 그 뒤에 가려져 있었습니다.
+
+**해결**
+`/error` 경로를 인증 예외 대상에 추가했습니다.
+
+```java
+.requestMatchers("/error").permitAll()
+```
+
+적용 후 실제 예외인 `LazyInitializationException`이 드러났습니다.
+
+### 메모 목록 조회 시 LazyInitializationException이 발생하는 문제
+
+**증상**
+`spring.jpa.open-in-view=false`로 변경한 뒤 메모 목록 조회가 실패했습니다.
+
+```
+LazyInitializationException: could not initialize proxy - no Session
+```
+
+**원인**
+`Memo.user`는 `fetch = LAZY`라 조회 시점에는 프록시만 채워집니다.
+실제 값은 `MemoResponse` 변환 과정의 `memo.getUser().getUsername()`에서
+처음 필요해지는데, 이 시점은 컨트롤러 — 즉 트랜잭션 밖입니다.
+`open-in-view=false`에서는 영속성 컨텍스트가 서비스 메서드 종료 시 닫히므로
+프록시가 DB에 접근할 수 없었습니다.
+
+기본값인 `true`에서는 예외 없이 동작하지만,
+메모 N개에 대해 목록 조회 1회 + 작성자 조회 N회의 쿼리가 발생합니다.
+같은 원인이 설정에 따라 성능 저하 또는 예외로 다르게 나타난 것입니다.
+
+| open-in-view  | 결과                                        |
+|---------------|---------------------------------------------|
+| true (기본값) | 쿼리 N+1회. 동작하지만 문제가 드러나지 않음 |
+| false         | 즉시 예외 발생. 문제가 조기에 노출됨        |
+
+**해결**
+`MemoRepository`의 조회 메서드에 `@EntityGraph`를 적용했습니다.
+
+```java
+@EntityGraph(attributePaths = "user")
+List<Memo> findAll();
+```
+
+LEFT JOIN으로 user를 함께 조회해 쿼리가 1회로 줄었고,
+프록시가 아닌 실제 객체가 채워져 트랜잭션 밖에서도 안전해졌습니다.
+
+`fetch = EAGER`는 전역 적용이라 user가 필요 없는 조회까지 조인이 발생해 제외했고,
+JPQL fetch join은 동일한 효과지만 메서드 시그니처 변경 없이 적용 가능한
+`@EntityGraph`를 선택했습니다.
 
 ## 배운 점
 
@@ -140,3 +354,34 @@ JWT의 페이로드는 Base64 인코딩일 뿐 암호화가 아니며,
 **인증과 인가의 구분**
 로그인 실패(401)와 타인의 리소스 접근(403)을
 서로 다른 예외 타입으로 분리해 처리했습니다.
+
+**에러 응답과 실제 원인의 불일치**
+Security 필터는 최초 요청뿐 아니라 서버 내부 forward에도 적용됩니다.
+클라이언트가 받은 상태 코드가 실제 예외와 다를 수 있다는 것을 전제하고
+디버깅해야 한다는 것을 배웠습니다.
+
+**설정이 문제를 만드는 것과 드러내는 것의 차이**
+`open-in-view=false`는 문제를 만든 설정이 아니라 숨어 있던 문제를 드러낸 설정이었습니다.
+DB 커넥션 점유 시간을 줄이는 이점도 있어 실무에서 권장되는 이유를 이해했습니다.
+
+## 한계 및 미구현
+
+학습 범위를 좁히기 위해 의도적으로 제외한 항목들입니다.
+
+**테스트 코드 없음**
+Postman 수동 검증으로 대체했습니다. 단위 테스트와 `@SpringBootTest` 기반 통합 테스트는 다음 프로젝트에서 다룰 예정입니다.
+
+**H2 인메모리 DB**
+애플리케이션 재시작 시 데이터가 초기화됩니다. 운영 환경을 가정한다면 MySQL 등으로 교체하고 마이그레이션 도구가 필요합니다.
+
+**리프레시 토큰 미구현**
+액세스 토큰 만료 시 재로그인해야 합니다. 토큰 재발급과 로그아웃 처리(블랙리스트)는 포함하지 않았습니다.
+
+**페이지네이션·검색 없음**
+전체 조회가 모든 메모를 한 번에 반환합니다. 데이터가 늘어나면 `Pageable` 적용이 필요합니다.
+
+**예상치 못한 예외에 대한 공통 핸들러 미적용**
+`@RestControllerAdvice`는 정의된 예외만 처리하며, 그 외의 예외는 형식화되지 않은 응답으로 나갑니다. 학습 단계에서는 문제가 감춰지지 않도록 의도적으로 두었습니다.
+
+**인증 실패 응답 형식 미통일**
+Security 필터 단계에서 차단된 요청은 `@RestControllerAdvice`를 거치지 않아 Spring Boot 기본 형식으로 반환됩니다. `AuthenticationEntryPoint`와 `AccessDeniedHandler` 구현으로 통일할 수 있습니다.
