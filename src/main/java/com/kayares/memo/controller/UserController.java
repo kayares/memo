@@ -8,6 +8,7 @@ import com.kayares.memo.dto.UserResponse;
 import com.kayares.memo.service.UserService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -23,7 +24,7 @@ public class UserController {
 
         User savedUser = userService.signup(request.getUsername(), request.getPassword());
 
-        return ResponseEntity.ok(new UserResponse(savedUser));
+        return ResponseEntity.status(HttpStatus.CREATED).body(new UserResponse(savedUser));
     }
 
     @PostMapping("/login")
