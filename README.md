@@ -68,6 +68,58 @@ cd memo
 - `spring.jpa.hibernate.ddl-auto=create` — 실행 시 스키마 재생성 (학습용)
 - H2 콘솔: `http://localhost:8080/h2-console`
 
+## 아키텍처
+
+### 요청 흐름 — 인증 성공
+
+```mermaid
+flowchart TD
+    Client([클라이언트]) -->|GET /memos + JWT| Tomcat[톰캣]
+    Tomcat <--> Filter[JwtAuthenticationFilter]
+    Filter <-->|인증 정보 저장| Context[(SecurityContext)]
+
+    Filter <-->|검증 성공| DS[DispatcherServlet]
+    DS <-->|핸들러 조회| HM[HandlerMapping]
+    DS <--> HA[HandlerAdapter]
+    HA <-->|JSON 변환| Conv[HttpMessageConverter]
+    HA <--> Ctrl[MemoController]
+    Ctrl <--> Svc[MemoService]
+    Svc <--> Repo[MemoRepository]
+    Repo <--> DB[(DB)]
+
+    HA -.->|400| DS
+    Svc -.->|404| DS
+    DS <-.->|예외 처리| GEH[GlobalExceptionHandler]
+
+    style GEH fill:#e8f5e9
+    style DS fill:#fff3e0
+```
+
+### 요청 흐름 — 인증 실패
+
+```mermaid
+flowchart TD
+    Client([클라이언트]) -->|GET /memos<br/>토큰 없음 / 만료| Tomcat[톰캣]
+    Tomcat -->|REQUEST 디스패치| Filter[Security 필터 체인]
+    Filter -->|AccessDeniedException<br/>필터 내부에서 소비| Entry[Http403ForbiddenEntryPoint]
+    Entry -->|sendError 403| Tomcat
+
+    Tomcat -->|ERROR 디스패치| Filter2[Security 필터 체인<br/>재통과 · permitAll 필요]
+    Filter2 --> DS[DispatcherServlet]
+    DS --> BEC[BasicErrorController]
+    BEC -->|Spring Boot 기본 형식| Client
+
+    GEH[GlobalExceptionHandler<br/>호출 안 됨 · 전파된 예외 없음]:::off
+    DS -.- GEH
+
+    classDef off fill:#f5f5f5,stroke:#bbb,color:#999
+```
+
+> **실선** - 정상 요청·응답 경로 / **점선** - 예외 전파
+
+- **400 / 404** — 예외가 `DispatcherServlet`까지 전파 → `GlobalExceptionHandler` → 프로젝트 `ErrorResponse` 형식
+- **인증 실패** — 예외가 Security 필터 내부에서 소비됨 → `sendError` → `/error` ERROR 디스패치 → `BasicErrorController` 기본 형식
+
 ## API 명세
 
 | Method | Endpoint      | 설명               | 인증 |
@@ -235,8 +287,12 @@ Authorization: Bearer eyJhbGciOiJIUzUxMiJ9...
 ### 인증 실패 응답
 
 토큰이 없거나 유효하지 않은 요청은 Security 필터 단계에서 차단됩니다.
-필터는 `DispatcherServlet` 앞에 위치하므로 `@RestControllerAdvice`가
-관여하지 못하며, 위 형식이 아닌 Spring Boot 기본 응답이 반환됩니다.
+`ExceptionTranslationFilter`가 `AccessDeniedException`을 필터 내부에서 소비하고
+`Http403ForbiddenEntryPoint`가 `sendError(403)`을 호출하므로,
+`DispatcherServlet`까지 전파되는 예외가 존재하지 않습니다.
+이후 톰캣이 ERROR 디스패치로 `/error`를 호출하고
+`BasicErrorController`가 응답을 생성하기 때문에,
+`@RestControllerAdvice`가 관여하지 못하고 Spring Boot 기본 형식이 반환됩니다.
 
 `403 Forbidden`
 
