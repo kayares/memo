@@ -120,6 +120,29 @@ flowchart TD
 - **400 / 404** — 예외가 `DispatcherServlet`까지 전파 → `GlobalExceptionHandler` → 프로젝트 `ErrorResponse` 형식
 - **인증 실패** — 예외가 Security 필터 내부에서 소비됨 → `sendError` → `/error` ERROR 디스패치 → `BasicErrorController` 기본 형식
 
+### ERD
+
+```mermaid
+erDiagram
+    USERS ||--o{ MEMO : writes
+
+    USERS {
+        bigint id PK
+        varchar_50 username UK "NOT NULL"
+        varchar password "NOT NULL"
+    }
+
+    MEMO {
+        bigint id PK
+        varchar_100 title "NOT NULL"
+        varchar_1000 content "NOT NULL"
+        datetime created_at "NOT NULL"
+        bigint user_id FK "NOT NULL"
+    }
+```
+
+> `MemoResponse.username`은 `MEMO.user_id`로 연결된 `USERS`를 조인해 가져옵니다.
+
 ## API 명세
 
 | Method | Endpoint      | 설명               | 인증 |
@@ -419,6 +442,15 @@ Security 필터는 최초 요청뿐 아니라 서버 내부 forward에도 적용
 **설정이 문제를 만드는 것과 드러내는 것의 차이**
 `open-in-view=false`는 문제를 만든 설정이 아니라 숨어 있던 문제를 드러낸 설정이었습니다.
 DB 커넥션 점유 시간을 줄이는 이점도 있어 실무에서 권장되는 이유를 이해했습니다.
+
+**객체 생성 시각과 영속화 시각의 구분**
+처음에는 생성자에서 `createdAt`을 채웠습니다.
+이 경우 기록되는 것은 자바 객체가 만들어진 시각이며,
+`@PrePersist`로 옮기면 DB에 저장되는 시각이 기록됩니다.
+지금은 두 시점이 사실상 같지만,
+객체를 만들어두고 나중에 저장하는 경로가 생기면 달라집니다.
+생성일자가 무엇의 생성인지 정해야 하는 문제였고,
+영속화 시점을 기준으로 삼았습니다.
 
 ## 한계 및 미구현
 
